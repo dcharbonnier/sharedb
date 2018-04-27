@@ -1,58 +1,72 @@
-var OpStream = require('../op-stream');
-var util = require('../util');
-var ShareDBError = require('../error');
+const OpStream = require('../op-stream');
+const util = require('../util');
+const ShareDBError = require('../error');
 
-export class PubSub {
-    public prefix: any;
-    public nextStreamId: any;
-    public streamsCount: any;
-    public streams: any;
-    public subscribed: any;
+export interface IPubSubOptions {
+    prefix?: string
 
-    constructor(options) {
-        this.prefix = options && options.prefix;
-        this.nextStreamId = 1;
-        this.streamsCount = 0;
-        // Maps channel -> id -> stream
-        this.streams = {};
-        // State for tracking subscriptions. We track this.subscribed separately from
-        // the streams, since the stream gets added synchronously, and the subscribe
-        // isn't complete until the callback returns from Redis
-        // Maps channel -> true
-        this.subscribed = {};
+}
+
+export interface IStream {
+    id: string
+}
+
+
+export abstract class PubSub {
+
+    private static shallowCopy(object: object): object {
+        const out = {};
+        for (const key in object) {
+            out[key] = object[key];
+        }
+        return out;
     }
 
-    public close(callback) {
-        for (var channel in this.streams) {
-            var map = this.streams[channel];
-            for (var id in map) {
+    protected prefix?: string;
+    protected nextStreamId: number = 1;
+    protected streamsCount: number = 0;
+    // Maps channel -> id -> stream
+    protected streams: { [channel: string]: IStream } = {};
+    // State for tracking subscriptions. We track this.subscribed separately from
+    // the streams, since the stream gets added synchronously, and the subscribe
+    // isn't complete until the callback returns from Redis
+    // Maps channel -> true
+    protected subscribed: { [channel: string]: boolean } = {};
+
+
+
+    protected constructor(options?: IPubSubOptions) {
+        this.prefix = options && options.prefix;
+    }
+
+    public close(callback: () => void) {
+        for (const channel in this.streams) {
+            const map = this.streams[channel];
+            for (const id in map) {
                 map[id].destroy();
             }
         }
         if (callback) callback();
     };
 
-    public _subscribe(channel, callback) {
-        callback(new ShareDBError(5015, '_subscribe PubSub method unimplemented'));
+    public publish(channels: string[], data: object, callback: (err: Error | null) => void): void {
+        if (this.prefix) {
+            for (let i = 0; i < channels.length; i++) {
+                channels[i] = this.prefix + ' ' + channels[i];
+            }
+        }
+        this._publish(channels, data, callback);
     };
 
-    public _unsubscribe(channel, callback) {
-        callback(new ShareDBError(5016, '_unsubscribe PubSub method unimplemented'));
-    };
-
-    public _publish(channels, data, callback) {
-        callback(new ShareDBError(5017, '_publish PubSub method unimplemented'));
-    };
-
-    public subscribe(channel, callback) {
+    public subscribe(channel:string, callback: (err: Error | null, stream?: IStream) => void) {
         if (this.prefix) {
             channel = this.prefix + ' ' + channel;
         }
 
-        var pubsub = this;
+        const pubsub = this;
         if (this.subscribed[channel]) {
             process.nextTick(function () {
-                var stream = pubsub._createStream(channel);
+                const stream = pubsub._createStream(channel);
                 callback(null, stream);
             });
             return;
@@ -60,47 +74,44 @@ export class PubSub {
         this._subscribe(channel, function (err) {
             if (err) return callback(err);
             pubsub.subscribed[channel] = true;
-            var stream = pubsub._createStream(channel);
+            const stream = pubsub._createStream(channel);
             callback(null, stream);
         });
     };
 
-    public publish(channels, data, callback) {
-        if (this.prefix) {
-            for (var i = 0; i < channels.length; i++) {
-                channels[i] = this.prefix + ' ' + channels[i];
-            }
-        }
-        this._publish(channels, data, callback);
-    };
+    protected abstract _subscribe(channel: string, callback: (err: Error | null) => void): void;
 
-    public _emit(channel, data) {
-        var channelStreams = this.streams[channel];
+    protected abstract _unsubscribe(channel: string, callback: (err: Error | null) => void): void;
+
+    protected abstract _publish(channels: string[], data: Object, callback: (err: Error | null) => void): void;
+
+    protected _emit(channel: string, data: object) {
+        const channelStreams = this.streams[channel];
         if (channelStreams) {
-            for (var id in channelStreams) {
-                var copy:any = PubSub.shallowCopy(data);
-                channelStreams[id].pushOp(copy.c, copy.d, copy);
+            for (const id in channelStreams) {
+                const copy = PubSub.shallowCopy(data);
+                channelStreams[id].pushOp(copy["c"], copy["d"], copy);
             }
         }
     };
 
-    public _createStream(channel) {
-        var stream = new OpStream();
-        var pubsub = this;
+    private _createStream(channel: string): IStream {
+        const stream = new OpStream();
+        const pubsub = this;
         stream.once('close', function () {
             pubsub._removeStream(channel, stream);
         });
 
         this.streamsCount++;
-        var map = this.streams[channel] || (this.streams[channel] = {});
+        const map = this.streams[channel] || (this.streams[channel] = {} as any);
         stream.id = this.nextStreamId++;
         map[stream.id] = stream;
 
         return stream;
     };
 
-    public _removeStream(channel, stream) {
-        var map = this.streams[channel];
+    private _removeStream(channel: string, stream: IStream) {
+        const map = this.streams[channel];
         if (!map) return;
 
         this.streamsCount--;
@@ -110,7 +121,7 @@ export class PubSub {
         if (util.hasKeys(map)) return;
         delete this.streams[channel];
         // Synchronously clear subscribed state. We won't actually be unsubscribed
-        // until some unkown time in the future. If subscribe is called in this
+        // until some unknown time in the future. If subscribe is called in this
         // period, we want to send a subscription message and wait for it to
         // complete before we can count on being subscribed again
         delete this.subscribed[channel];
@@ -120,11 +131,4 @@ export class PubSub {
         });
     };
 
-    static shallowCopy(object) {
-        var out = {};
-        for (var key in object) {
-            out[key] = object[key];
-        }
-        return out;
-    }
 }
