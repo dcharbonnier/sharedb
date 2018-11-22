@@ -1,3 +1,21 @@
+# v3.0.1
+
+## Non-breaking changes
+
+- Ignore undoable no-ops in UndoManager. As a result, no-ops will no longer clear the redo stack.
+
+
+# v3.0.0
+
+## Breaking changes
+
+- The error code for "OT Type does not support presence" changed from 4024 to 4029. The change was necessary to remain compatible with the official ShareDB repo.
+
+## Non-breaking changes
+
+- Snapshot Milestones were merged from the official ShareDB repo.
+
+
 # v2.0.1
 
 ## Breaking changes

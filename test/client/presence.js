@@ -576,7 +576,7 @@ types.register(presenceType.type3);
         function(done) {
           this.doc.submitPresence(p(0), function(err) {
             expect(err).to.be.an(Error);
-            expect(err.code).to.equal(4024);
+            expect(err.code).to.equal(4029);
             done();
           });
         }.bind(this)
@@ -590,7 +590,7 @@ types.register(presenceType.type3);
         function(done) {
           this.doc.on('error', function(err) {
             expect(err).to.be.an(Error);
-            expect(err.code).to.equal(4024);
+            expect(err.code).to.equal(4029);
             done();
           });
           this.doc.submitPresence(p(0));

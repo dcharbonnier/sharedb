@@ -1355,7 +1355,7 @@ describe('client submit', function() {
     doc.create([ otRichText.Action.createInsertText('aaaa') ], otRichText.type.uri);
     doc.on('op', function(op) {
       expect(doc.data).to.eql([ otRichText.Action.createInsertText('aaaaa') ]);
-      expect(op).to.eql([ otRichText.Action.createInsertText('a') ]);
+      expect(op).to.eql([ otRichText.Action.createRetain(4), otRichText.Action.createInsertText('a') ]);
       opCalled = true;
     });
     doc.submitSnapshot([ otRichText.Action.createInsertText('aaaaa') ]);

@@ -1445,14 +1445,14 @@ describe('client undo/redo', function() {
 
     this.doc.once('op', function(op) {
       expect(this.doc.data).to.eql([ otRichText.Action.createInsertText('aaaa') ]);
-      expect(op).to.eql([ otRichText.Action.createDelete(1) ]);
+      expect(op).to.eql([ otRichText.Action.createRetain(4), otRichText.Action.createDelete(1) ]);
       opCalled++;
     }.bind(this));
     undoManager.undo();
 
     this.doc.once('op', function(op) {
       expect(this.doc.data).to.eql([ otRichText.Action.createInsertText('aaaaa') ]);
-      expect(op).to.eql([ otRichText.Action.createInsertText('a') ]);
+      expect(op).to.eql([ otRichText.Action.createRetain(4), otRichText.Action.createInsertText('a') ]);
       opCalled++;
     }.bind(this));
     undoManager.redo();
